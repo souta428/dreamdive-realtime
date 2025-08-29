@@ -39,9 +39,9 @@ A = np.log(np.array([
     [0.70, 0.25,  0.03,  0.02],   # from W
     [0.10, 0.70,  0.15,  0.05],   # from L
     [0.05, 0.20,  0.70,  0.05],   # from D
-    [0.20, 0.60,  0.00,  0.20],   # from R (REM->Light/Wakeに戻りやすい)
+    [0.20, 0.60,  0.01,  0.19],   # from R (REM->Light/Wakeに戻りやすい, 0除去)
 ], dtype=float))
-PI = np.log(np.array([0.6, 0.3, 0.1, 0.0]) + 1e-6)  # 初期確率（入床直後はW寄り）
+PI = np.log(np.array([0.6, 0.3, 0.09, 0.01]) + 1e-6)  # 初期確率（入床直後はW寄り）
 
 app = Flask(__name__, static_folder=".")
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -107,10 +107,16 @@ class EmotivStreamer:
         self.pow_buf = deque(maxlen=int(POW_HZ*(EPOCH_SEC*10)))
         self.acc_buf = deque(maxlen=MOT_SRATE*(EPOCH_SEC*10))
         self.eq_state = 1.0
+        self.last_data_time = time.time()  # データ最終受信時刻
+        self.data_timeout = 30  # 30秒間データなしで再接続
+        self.zero_data_count = 0  # pow=0, acc=0 の連続回数
+        self.zero_data_threshold = 3  # 3回連続でpow=0, acc=0なら再接続
 
     def connect_and_subscribe(self):
         # ログイン
+        print("[DEBUG] ログイン確認中...")
         r = self.c.rpc("getUserLogin")
+        print(f"[DEBUG] Login response: {r}")
         if isinstance(r, list):
             logged = bool(r)
         else:
@@ -118,30 +124,38 @@ class EmotivStreamer:
         if not logged:
             raise RuntimeError("Emotiv Launcherにログインしてください。")
 
+        print("[DEBUG] アクセス権確認中...")
         # アクセス権
         self.c.rpc("requestAccess", {"clientId": CLIENT_ID, "clientSecret": CLIENT_SECRET})
         r = self.c.rpc("hasAccessRight", {"clientId": CLIENT_ID, "clientSecret": CLIENT_SECRET})
+        print(f"[DEBUG] Access response: {r}")
         if not r.get("accessGranted", False):
             raise RuntimeError("Launcherでアプリ許可が未承認です。")
 
+        print("[DEBUG] 認可処理中...")
         # 認可
         self.token = self.c.rpc("authorize", {
             "clientId": CLIENT_ID, "clientSecret": CLIENT_SECRET, "debit": 0
         })["cortexToken"]
 
+        print("[DEBUG] ヘッドセット検索中...")
         # デバイス
         hs = self.c.rpc("queryHeadsets")
+        print(f"[DEBUG] Headsets: {hs}")
         if not hs: raise RuntimeError("ヘッドセット未検出。")
         hid = hs[0]["id"]
 
+        print("[DEBUG] セッション作成中...")
         # セッション
         self.session = self.c.rpc("createSession", {
             "cortexToken": self.token, "headset": hid, "status":"open"
         })["id"]
 
+        print("[DEBUG] データストリーム購読中...")
         # 購読
         need = ["pow","mot","dev","eq","met"]
         res = self.c.rpc("subscribe", {"cortexToken": self.token, "session": self.session, "streams": need})
+        print(f"[DEBUG] Subscribe result: {res}")
         for s in res["success"]:
             if s["streamName"]=="pow":
                 idxs = defaultdict(list)
@@ -155,18 +169,64 @@ class EmotivStreamer:
         msg = self.c.get_push(timeout=0.5)
         if not msg: return
         t = msg.get("time", time.time())
+        
+        # データ受信時刻を更新
+        data_received = False
+        pow_data_received = False
+        mot_data_received = False
+        
         if "pow" in msg:
             self.pow_buf.append((t, np.asarray(msg["pow"], dtype=float)))
+            data_received = True
+            pow_data_received = True
         if "mot" in msg:
             mv = np.asarray(msg["mot"], dtype=float)
             ax, ay, az = mv[-3:]   # 実機の並びに合わせて調整可
             rms = float(math.sqrt(ax*ax+ay*ay+az*az))
             self.acc_buf.append((t, rms))
+            data_received = True
+            mot_data_received = True
         if "eq" in msg:
             try:
                 self.eq_state = float(np.nanmean(np.asarray(msg["eq"], dtype=float)))
             except:
                 self.eq_state = 1.0
+                
+        # データを受信した場合は最終受信時刻を更新
+        if data_received:
+            self.last_data_time = time.time()
+            # 有効なデータが来たらzero_data_countをリセット
+            if pow_data_received or mot_data_received:
+                self.zero_data_count = 0
+
+    def is_data_stalled(self):
+        """データが停止しているかチェック"""
+        return (time.time() - self.last_data_time) > self.data_timeout
+        
+    def is_zero_data_stalled(self):
+        """pow=0, acc=0 状態が連続しているかチェック"""
+        return self.zero_data_count >= self.zero_data_threshold
+        
+    def reconnect(self):
+        """再接続処理"""
+        print("[WARN] データ停止を検知。再接続を試行中...")
+        try:
+            # 既存セッションのクリーンアップ
+            if self.session:
+                try:
+                    self.c.rpc("updateSession", {"cortexToken": self.token, "session": self.session, "status": "close"})
+                except:
+                    pass
+            
+            # 新しいセッションで再接続
+            self.connect_and_subscribe()
+            self.last_data_time = time.time()
+            self.zero_data_count = 0  # カウンターリセット
+            print("[INFO] 再接続が成功しました")
+            return True
+        except Exception as e:
+            print(f"[ERROR] 再接続に失敗: {e}")
+            return False
 
 
 # ==== アルゴリズム（速報＆確定 + HMM） ====
@@ -289,50 +349,109 @@ class Stager:
 
 # ==== メインループ：配信 ====
 def main_loop():
+    print("[MAIN] Starting main loop...")
     if not CLIENT_ID or not CLIENT_SECRET:
+        print(f"[ERROR] CLIENT_ID: {CLIENT_ID}, CLIENT_SECRET: {bool(CLIENT_SECRET)}")
         raise RuntimeError("CLIENT_ID/CLIENT_SECRET を .env に設定してください。")
-    c = CortexClient()
+    
+    print("[MAIN] Creating Cortex client...")
+    try:
+        c = CortexClient()
+        print("[MAIN] Cortex client created successfully")
+    except Exception as e:
+        print(f"[ERROR] Cortex client creation failed: {e}")
+        return
+    
+    print("[MAIN] Creating streamer...")
     em = EmotivStreamer(c)
-    em.connect_and_subscribe()
+    
+    try:
+        print("[MAIN] Connecting and subscribing...")
+        em.connect_and_subscribe()
+        print("[MAIN] Successfully connected and subscribed")
+    except Exception as e:
+        print(f"[ERROR] Connection failed: {e}")
+        return
+    
     st = Stager()
 
     last_micro = time.time()
     last_push_time = 0.0
+    
+    print("[MAIN] Entering data processing loop...")
 
     while True:
-        em.loop_once()
-        now = time.time()
+        try:
+            em.loop_once()
+            now = time.time()
 
-        # 速報（10秒窓、2秒ごと）
-        if (now - last_micro) >= MICRO_HOP_SEC:
-            micro_pow = [(t,v) for (t,v) in em.pow_buf if now-MICRO_EPOCH_SEC <= t <= now]
-            micro_acc = [(t,a) for (t,a) in em.acc_buf if now-MICRO_EPOCH_SEC <= t <= now]
-
-            if em.pow_layout and len(micro_pow)>=3 and len(micro_acc)>=MOT_SRATE*2:
-                if em.eq_state >= EQ_MIN:   # 品質が悪いときは保留
-                    res = st.micro_update(micro_pow, micro_acc, em.pow_layout)
+            # データ停止チェック
+            if em.is_data_stalled():
+                if em.reconnect():
+                    continue
                 else:
-                    res = None
-                if res:
-                    t_center, stage, conf, (a,t,b,m) = res
-                    conf30 = st.confirm_last_30s()  # HMM確定
-                    # HMMの確定結果があればそれを出す、なければ速報を出す
-                    final_stage, final_conf = (stage, conf)
-                    if conf30:
-                        _, final_stage, final_conf = conf30
+                    print("[ERROR] 再接続に失敗しました。10秒後に再試行します。")
+                    socketio.sleep(10.0)
+                    continue
 
-                    # UIへプッシュ（あなたのindex.htmlのpayloadに合わせる）
-                    socketio.emit("sleep_data", {
-                        "time_str": time.strftime("%H:%M:%S", time.localtime(t_center)),
-                        "stage": final_stage,
-                        "alpha": float(a), "theta": float(t), "beta": float(b),
-                        "moveRMS": float(m),
-                        "conf": float(final_conf),
-                        "eq": float(em.eq_state)
-                    })
-            last_micro += MICRO_HOP_SEC
+            # 速報（10秒窓、2秒ごと）
+            if (now - last_micro) >= MICRO_HOP_SEC:
+                micro_pow = [(t,v) for (t,v) in em.pow_buf if now-MICRO_EPOCH_SEC <= t <= now]
+                micro_acc = [(t,a) for (t,a) in em.acc_buf if now-MICRO_EPOCH_SEC <= t <= now]
 
-        socketio.sleep(0.05)
+                print(f"[DEBUG] Micro update: pow={len(micro_pow)}, acc={len(micro_acc)}, eq={em.eq_state:.2f}")
+
+                # pow=0, acc=0 状態をカウント
+                if len(micro_pow) == 0 and len(micro_acc) == 0 and em.pow_layout:
+                    em.zero_data_count += 1
+                    print(f"[WARN] Zero data detected (count: {em.zero_data_count}/{em.zero_data_threshold})")
+                    
+                    # 即座の再接続チェック
+                    if em.is_zero_data_stalled():
+                        print("[WARN] pow=0, acc=0 状態が連続で検出されました。即座に再接続します。")
+                        if em.reconnect():
+                            continue
+                        else:
+                            print("[ERROR] 即座の再接続に失敗しました。")
+
+                # 条件を緩和：powが3以上、accが10以上あればOK
+                if em.pow_layout and len(micro_pow)>=3 and len(micro_acc)>=10:
+                    if em.eq_state >= EQ_MIN:   # 品質が悪いときは保留
+                        res = st.micro_update(micro_pow, micro_acc, em.pow_layout)
+                        print(f"[DEBUG] Processing data...")
+                    else:
+                        res = None
+                        print(f"[WARN] EQ too low: {em.eq_state:.2f} < {EQ_MIN}")
+                    if res:
+                        t_center, stage, conf, (a,t,b,m) = res
+                        conf30 = st.confirm_last_30s()  # HMM確定
+                        # HMMの確定結果があればそれを出す、なければ速報を出す
+                        final_stage, final_conf = (stage, conf)
+                        if conf30:
+                            _, final_stage, final_conf = conf30
+
+                        print(f"[DATA] {time.strftime('%H:%M:%S', time.localtime(t_center))} Stage={final_stage} Conf={final_conf:.2f}")
+
+                        # UIへプッシュ（あなたのindex.htmlのpayloadに合わせる）
+                        socketio.emit("sleep_data", {
+                            "time_str": time.strftime("%H:%M:%S", time.localtime(t_center)),
+                            "stage": final_stage,
+                            "alpha": float(a), "theta": float(t), "beta": float(b),
+                            "moveRMS": float(m),
+                            "conf": float(final_conf),
+                            "eq": float(em.eq_state)
+                        })
+                        print(f"[DEBUG] Data sent to UI")
+                    else:
+                        print(f"[DEBUG] No valid feature data generated")
+                else:
+                    print(f"[DEBUG] Insufficient data: pow={len(micro_pow)}, acc={len(micro_acc)}, layout={bool(em.pow_layout)}")
+                last_micro += MICRO_HOP_SEC
+
+            socketio.sleep(0.05)
+        except Exception as e:
+            print(f"[ERROR] Main loop error: {e}")
+            socketio.sleep(1.0)
 
 
 @socketio.on("connect")
@@ -343,4 +462,4 @@ def on_connect():
 if __name__ == "__main__":
     socketio.start_background_task(main_loop)
     # index.html を同ディレクトリから配信
-    socketio.run(app, host="0.0.0.0", port=5000)
+    socketio.run(app, host="0.0.0.0", port=8080)
