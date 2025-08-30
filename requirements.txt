@@ -1,0 +1,4 @@
+websocket-client>=1.6.0
+python-dispatch>=0.2.0
+pyserial>=3.5
+Flask>=3.0.0
