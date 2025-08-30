@@ -23,8 +23,12 @@ from dash import Dash, dcc, html, Output, Input
 import plotly.graph_objs as go
 
 # ==== あなたの資格情報（Emotiv Developerで取得）====
-CLIENT_ID = "elEQNmVZbVOzSyV6PskFbdUtlI6wKZD2ZZ4vOJC6"
-CLIENT_SECRET = "AeMMNghneyGBXUs69MsXrKhq4nRIyXeCrc7k84z8X9a5ubt2HGMrk4i16vXd8Nnqu9N95WtdQinUirki3umAucLvpJ3BzmuQ2wWbdMf7uhj8AIv39fgAK9GHSG59yh56"
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+CLIENT_ID = os.getenv("CLIENT_ID", "")
+CLIENT_SECRET = os.getenv("CLIENT_SECRET", "")
 PROFILE_NAME = "default"  # Mental Commands等で使う場合のプロフィール名（任意）
 
 # ==== Cortex 接続先 ====
@@ -292,6 +296,9 @@ class CortexClient:
         self.ws.run_forever(sslopt=sslopt)
 
 # ==== 受信スレッド起動 ====
+if not CLIENT_ID or not CLIENT_SECRET:
+    raise SystemExit("CLIENT_ID/CLIENT_SECRET must be set via environment or .env file")
+
 client = CortexClient(CORTEX_URL, CLIENT_ID, CLIENT_SECRET, PROFILE_NAME)
 t = threading.Thread(target=client.run_forever, daemon=True)
 t.start()

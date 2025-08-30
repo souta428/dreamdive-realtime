@@ -80,6 +80,37 @@
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
+        .fac-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+        }
+        .fac-card {
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 12px;
+            background: #fafafa;
+        }
+        .fac-title {
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .fac-action {
+            font-size: 1.1em;
+            margin-bottom: 8px;
+        }
+        .power-bar {
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .power-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg,#4ecdc4,#667eea);
+            transition: width 0.2s ease;
+        }
     </style>
 </head>
 <body>
@@ -135,6 +166,28 @@
             <div class="chart-container">
                 <h3>運動量</h3>
                 <canvas id="movement-chart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3>表情 (Facial Expression)</h3>
+                <div id="fac-time" style="text-align:right;color:#666;margin:-8px 0 8px;">--:--:--</div>
+                <div class="fac-grid">
+                    <div class="fac-card">
+                        <div class="fac-title">目の動き</div>
+                        <div id="eye-action" class="fac-action">-</div>
+                        <div class="power-bar"><div id="eye-power" class="power-fill"></div></div>
+                    </div>
+                    <div class="fac-card">
+                        <div class="fac-title">上顔（眉・目）</div>
+                        <div id="upper-action" class="fac-action">-</div>
+                        <div class="power-bar"><div id="upper-power" class="power-fill"></div></div>
+                    </div>
+                    <div class="fac-card">
+                        <div class="fac-title">下顔（口）</div>
+                        <div id="lower-action" class="fac-action">-</div>
+                        <div class="power-bar"><div id="lower-power" class="power-fill"></div></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -344,6 +397,27 @@
             hypnogramChart.update('none');
             bandsChart.update('none');
             movementChart.update('none');
+        });
+
+        // Facial Expression handler
+        function setPower(elId, val) {
+            const v = Math.max(0, Math.min(1, Number(val) || 0));
+            const el = document.getElementById(elId);
+            if (el) el.style.width = (v * 100).toFixed(0) + '%';
+        }
+
+        socket.on('fac_data', function(data) {
+            if (!data) return;
+            document.getElementById('fac-time').textContent = data.time_str || '--:--:--';
+
+            document.getElementById('eye-action').textContent = data.eyeAction || '-';
+            setPower('eye-power', data.eyePower);
+
+            document.getElementById('upper-action').textContent = data.upperAction || '-';
+            setPower('upper-power', data.upperPower);
+
+            document.getElementById('lower-action').textContent = data.lowerAction || '-';
+            setPower('lower-power', data.lowerPower);
         });
     </script>
 </body>

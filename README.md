@@ -1,13 +1,19 @@
 # dreamdive-realtime
-睡眠ステージをリアル睡眠ステージをリアルタイムで監視するシステムです
+睡眠ステージをリアルタイムで監視するシステムです。
 
+## 環境変数の設定（重要）
+このリポジトリでは Emotiv Cortex API の `CLIENT_ID` と `CLIENT_SECRET` をハードコーディングせず、環境変数から読み込みます。ルートに `.env` を作成し、以下のように設定してください。
 
-CLIENT_ID=elEQNmVZbVOzSyV6PskFbdUtlI6wKZD2ZZ4vOJC6
+```
+CLIENT_ID=your_client_id
+CLIENT_SECRET=your_client_secret
+# 任意（使用する場合のみ）
+HEADSET_ID=your_headset_id
+```
 
-CLIENT_SECRET=AeMMNghneyGBXUs69MsXrKhq4nRIyXeCrc7k84z8X9a5ubt2HGMrk4i16vXd8Nnqu9N95WtdQinUirki3umAucLvpJ3BzmuQ2wWbdMf7uhj8AIv39fgAK9GHSG59yh56
+`.env.example` を参考にしてください。`.env` は `.gitignore` に含まれているため、誤ってコミットされません。
 
-## prorotype.pyはダッシュボードでいろんなAPIで取れるデータを見れるやつです
-
-## samplecodeは公式のサンプルコードとその解説が載ってます
-
-## sleepstage.mdは睡眠ステージ分析で行う解析の説明が書いてあります
+## プロジェクト構成メモ
+- `prototype.py`: ダッシュボードで各種 API から取得できるデータを可視化
+- `samplecode/`: 公式サンプルコードと解説
+- `sleepstage.md`: 睡眠ステージ分析の手法説明

@@ -1,0 +1,21 @@
+# Environment and secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# Local data outputs
+sleep_candidates*.csv
+sleep_candidates_*.csv
+*.log
+.server_frontend.pid
+.dashboard.pid
+
+# OS/Editor
+.DS_Store
+.vscode/

@@ -1,0 +1,66 @@
+[INFO] serving frontend at http://localhost:8000
+[INFO] watching CSV: sleep_candidates_20250830_233624.csv
+ * Serving Flask app 'server_frontend'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8000
+ * Running on http://192.168.128.122:8000
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [31/Aug/2025 00:27:45] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:27:51] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:27:57] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:28:03] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:28:09] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:28:15] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:28:20] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [31/Aug/2025 00:28:20] "[36mGET /app.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [31/Aug/2025 00:28:20] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:28:21] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:28:25] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:28:30] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:28:36] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:28:41] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:28:46] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:28:52] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:28:58] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:29:04] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:29:10] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:29:16] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:29:22] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:29:28] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:29:34] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:29:40] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:29:46] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:29:52] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:29:57] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:30:03] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:30:05] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [31/Aug/2025 00:30:05] "[36mGET /app.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [31/Aug/2025 00:30:05] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:30:10] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:30:16] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:30:22] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:30:28] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:30:34] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:30:40] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:30:46] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:30:52] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:30:58] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:31:04] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:31:10] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:31:16] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:31:22] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:31:28] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:31:34] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:31:40] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:31:42] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [31/Aug/2025 00:31:42] "[36mGET /app.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [31/Aug/2025 00:31:42] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:31:47] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:31:53] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:31:59] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:32:05] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:32:11] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:32:17] "GET /api/series?limit=720 HTTP/1.1" 200 -
+127.0.0.1 - - [31/Aug/2025 00:32:23] "GET /api/series?limit=720 HTTP/1.1" 200 -
