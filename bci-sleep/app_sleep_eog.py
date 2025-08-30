@@ -4,10 +4,15 @@ from cortex import Cortex
 from sleep_engine import SleepEngine
 from quality import is_all_zero, safe_get
 from eog_ingest import UDPJsonEOGSource  # or SerialCSVEOGSource
+from dotenv import load_dotenv
 
-CLIENT_ID     = ""   # ★設定
-CLIENT_SECRET = ""   # ★設定
-HEADSET_ID    = ""   # 任意
+# Load environment variables from .env if present
+load_dotenv()
+
+# Read credentials from environment
+CLIENT_ID     = os.getenv("CLIENT_ID", "")
+CLIENT_SECRET = os.getenv("CLIENT_SECRET", "")
+HEADSET_ID    = os.getenv("HEADSET_ID", "")   # 任意
 OUT_CSV = "sleep_candidates_eog.csv"
 
 class SleepAppEOG:
@@ -133,6 +138,6 @@ class SleepAppEOG:
 
 if __name__ == "__main__":
     if not CLIENT_ID or not CLIENT_SECRET:
-        raise SystemExit("Set CLIENT_ID / CLIENT_SECRET in app_sleep_eog.py")
+        raise SystemExit("Set CLIENT_ID / CLIENT_SECRET via environment or .env file")
     app = SleepAppEOG()
     app.start()

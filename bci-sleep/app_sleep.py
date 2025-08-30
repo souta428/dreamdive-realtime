@@ -3,10 +3,15 @@ import time, csv, os
 from datetime import datetime
 from cortex import Cortex
 from sleep_engine import SleepEngine
+from dotenv import load_dotenv
 
-CLIENT_ID     = "elEQNmVZbVOzSyV6PskFbdUtlI6wKZD2ZZ4vOJC6"   # ★設定
-CLIENT_SECRET = "AeMMNghneyGBXUs69MsXrKhq4nRIyXeCrc7k84z8X9a5ubt2HGMrk4i16vXd8Nnqu9N95WtdQinUirki3umAucLvpJ3BzmuQ2wWbdMf7uhj8AIv39fgAK9GHSG59yh56"   # ★設定
-HEADSET_ID    = ""   # 任意
+# Load environment variables from .env if present
+load_dotenv()
+
+# Read credentials from environment
+CLIENT_ID     = os.getenv("CLIENT_ID", "")
+CLIENT_SECRET = os.getenv("CLIENT_SECRET", "")
+HEADSET_ID    = os.getenv("HEADSET_ID", "")   # 任意
 BASE_CSV_NAME = "sleep_candidates"
 
 def _is_all_zero(vec):
@@ -152,6 +157,6 @@ class SleepApp:
 
 if __name__ == "__main__":
     if not CLIENT_ID or not CLIENT_SECRET:
-        raise SystemExit("Please set CLIENT_ID / CLIENT_SECRET in app_sleep.py")
+        raise SystemExit("Please set CLIENT_ID / CLIENT_SECRET via environment variables or .env file")
     app = SleepApp()
     app.start()

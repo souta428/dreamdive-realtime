@@ -26,10 +26,13 @@ import ssl
 import time
 import json
 from datetime import datetime
+import os
+from dotenv import load_dotenv
 
-# Client credentials for Cortex API
-CLIENT_ID = "elEQNmVZbVOzSyV6PskFbdUtlI6wKZD2ZZ4vOJC6"
-CLIENT_SECRET = "AeMMNghneyGBXUs69MsXrKhq4nRIyXeCrc7k84z8X9a5ubt2HGMrk4i16vXd8Nnqu9N95WtdQinUirki3umAucLvpJ3BzmuQ2wWbdMf7uhj8AIv39fgAK9GHSG59yh56"
+# Load environment variables for optional defaults (not used directly here)
+load_dotenv()
+CLIENT_ID = os.getenv("CLIENT_ID", "")
+CLIENT_SECRET = os.getenv("CLIENT_SECRET", "")
 
 # define request id
 QUERY_HEADSET_ID                    =   1
