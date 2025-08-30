@@ -76,6 +76,7 @@ def read_rows(limit=720):
                 "signal": _f("signal"),
                 "eog_sacc": _f("eog_sacc"),
                 "eog_on": _f("eog_on"),
+                "eye_act": row.get("eye_act", ""),
             })
     return out
 

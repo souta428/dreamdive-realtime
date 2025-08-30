@@ -61,6 +61,7 @@ function makeMotion(ctx){
       datasets: [
         {label:"Motion RMS", yAxisID:"y1", borderWidth:2, pointRadius:0, data:[], borderColor:"#f59e0b"},
         {label:"EOG sacc/s", yAxisID:"y2", borderWidth:2, pointRadius:0, data:[], borderColor:"#a78bfa"},
+        {label:"FAC rate", yAxisID:"y3", borderWidth:2, pointRadius:0, data:[], borderColor:"#10b981"},
       ]
     },
     options: {
@@ -69,6 +70,7 @@ function makeMotion(ctx){
         x:{ type:"time", time:{unit:"minute"}, ticks:{color:"#cbd5e1"}, grid:{color:"rgba(148,163,184,.2)"} },
         y1:{ position:"left", min:0, max:100, ticks:{ color:"#f59e0b", stepSize:20 }, grid:{color:"rgba(148,163,184,.1)"}, title:{display:true, text:"Motion RMS", color:"#f59e0b"} },
         y2:{ position:"right", min:-2, max:2, ticks:{ color:"#a78bfa", stepSize:1 }, grid:{display:false}, title:{display:true, text:"EOG sacc/s", color:"#a78bfa"} },
+        y3:{ position:"right", min:0, max:1, offset:true, ticks:{ color:"#10b981", stepSize:0.2 }, grid:{display:false}, title:{display:true, text:"FAC rate", color:"#10b981"} },
       },
       plugins:{ legend:{ labels:{ color:"#e2e8f0"} } }
     }
@@ -94,6 +96,16 @@ function updateBadges(meta, last){
   const sigBadge = document.getElementById("sigBadge");
   sigBadge.textContent = `Signal: ${fmt(last?.signal,2)}`;
   sigBadge.className = "badge " + ((last?.signal||0) >= 0.3 ? "ok":"warn");
+
+  const eyeBadge = document.getElementById("eyeBadge");
+  const eye = (last?.eye_act || "");
+  eyeBadge.textContent = `EyeAct: ${eye || '—'}`;
+  eyeBadge.className = "badge " + (/look_(left|right)/.test(eye) ? "ok" : "");
+
+  const facBadge = document.getElementById("facBadge");
+  const fac = last?.fac_rate;
+  facBadge.textContent = `FAC: ${fmt(fac,2)}`;
+  facBadge.className = "badge " + ((fac||0) >= 0.02 ? "ok":"");
 
   const statusBadge = document.getElementById("statusBadge");
   statusBadge.textContent = `Status: ${new Date(meta.now).toLocaleTimeString()} 更新`;
@@ -129,6 +141,7 @@ function render(series){
 
   motionChart.data.datasets[0].data = series.rows.map(r=>({x:r.time, y:r.motion_rms}));
   motionChart.data.datasets[1].data = series.rows.map(r=>({x:r.time, y:r.eog_sacc}));
+  motionChart.data.datasets[2].data = series.rows.map(r=>({x:r.time, y:r.fac_rate}));
   motionChart.update();
 
   updateBadges(series, last);

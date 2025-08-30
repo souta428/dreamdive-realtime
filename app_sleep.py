@@ -133,7 +133,8 @@ class SleepApp:
                f"stage={r['stage']}, conf={r['confidence']} | "
                f"th/al={r['theta_alpha']:.2f}, beta_rel={r['beta_rel']:.2f}, "
                f"motRMS={r['motion_rms']:.3f}, facRate={r['fac_rate']:.3f}, "
-               f"signal={r['signal']:.2f}, EOG={'ON' if int(r.get('eog_on',0)) else 'OFF'}")
+               f"signal={r['signal']:.2f}, EOG={'ON' if int(r.get('eog_on',0)) else 'OFF'}, "
+               f"eyeAct={r.get('eye_act','')}")
         print(msg)
 
     def _append_csv(self, r):
@@ -143,11 +144,11 @@ class SleepApp:
         with open(self._csv_filename, "a", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             if newfile:
-                w.writerow(["time","stage","confidence","theta_alpha","beta_rel","motion_rms","fac_rate","signal","eog_on","eog_sacc"])
+                w.writerow(["time","stage","confidence","theta_alpha","beta_rel","motion_rms","fac_rate","signal","eog_on","eog_sacc","eye_act"])
             w.writerow([
                 round(r['t'], 1), r['stage'] or "", r['confidence'],
                 r['theta_alpha'], r['beta_rel'], r['motion_rms'],
-                r['fac_rate'], r['signal'], r.get('eog_on',0.0), r.get('eog_sacc',0.0)
+                r['fac_rate'], r['signal'], r.get('eog_on',0.0), r.get('eog_sacc',0.0), r.get('eye_act','')
             ])
 
 if __name__ == "__main__":
