@@ -76,7 +76,23 @@ function makeMotion(ctx){
 }
 
 async function fetchSeries(){
-  const r = await fetch(`/api/series?limit=720`);
+  // 現在のユーザー名を取得（グローバル変数またはURLから）
+  let currentUser = window.CURRENT_USER;
+  if (!currentUser) {
+    // URLからユーザー名を抽出
+    const pathParts = window.location.pathname.split('/').filter(p => p);
+    if (pathParts.length > 0) {
+      currentUser = pathParts[0];
+    }
+  }
+  
+  // APIリクエストURLを構築
+  let apiUrl = `/api/series?limit=720`;
+  if (currentUser) {
+    apiUrl += `&user=${encodeURIComponent(currentUser)}`;
+  }
+  
+  const r = await fetch(apiUrl);
   if(!r.ok) return null;
   return await r.json();
 }
@@ -118,6 +134,24 @@ function render(series){
   })).filter(p => p.y !== null);
 
   const last = series.rows[series.rows.length-1];
+
+  // データがない場合の処理
+  if (series.rows.length === 0) {
+    document.getElementById("noDataMessage").style.display = "block";
+    document.getElementById("chartHypno").style.display = "none";
+    document.getElementById("chartBrainWaves").style.display = "none";
+    document.getElementById("chartMotion").style.display = "none";
+    
+    // KPIをリセット
+    updateKPIs(null);
+    updateBadges(series, null);
+    return;
+  } else {
+    document.getElementById("noDataMessage").style.display = "none";
+    document.getElementById("chartHypno").style.display = "block";
+    document.getElementById("chartBrainWaves").style.display = "block";
+    document.getElementById("chartMotion").style.display = "block";
+  }
 
   hypnoChart.data.datasets[0].data = ptsHyp;
   hypnoChart.data.datasets[0].borderColor = ptsHyp.length ? colorForStage(ptsHyp[ptsHyp.length-1].stage) : "#38bdf8";
