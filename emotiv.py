@@ -46,6 +46,12 @@ PI = np.log(np.array([0.6, 0.3, 0.09, 0.01]) + 1e-6)  # 初期確率（入床直
 app = Flask(__name__, static_folder=".")
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+def _to_float_silent(x):
+    try:
+        return float(x)
+    except Exception:
+        return None
+
 # ---- UIもここから配れるように（index.htmlを同ディレクトリに置く） ----
 @app.route("/")
 def root():
@@ -152,8 +158,8 @@ class EmotivStreamer:
         })["id"]
 
         print("[DEBUG] データストリーム購読中...")
-        # 購読
-        need = ["pow","mot","dev","eq","met"]
+        # 購読（fac: Facial Expressionも追加）
+        need = ["pow","mot","dev","eq","met","fac"]
         res = self.c.rpc("subscribe", {"cortexToken": self.token, "session": self.session, "streams": need})
         print(f"[DEBUG] Subscribe result: {res}")
         for s in res["success"]:
@@ -174,6 +180,7 @@ class EmotivStreamer:
         data_received = False
         pow_data_received = False
         mot_data_received = False
+        fac_data_received = False
         
         if "pow" in msg:
             self.pow_buf.append((t, np.asarray(msg["pow"], dtype=float)))
@@ -191,13 +198,114 @@ class EmotivStreamer:
                 self.eq_state = float(np.nanmean(np.asarray(msg["eq"], dtype=float)))
             except:
                 self.eq_state = 1.0
+        # Facial Expression
+        if "fac" in msg:
+            fac_payload = self._normalize_fac(msg["fac"], t)
+            if fac_payload is not None:
+                socketio.emit("fac_data", fac_payload)
+                data_received = True
+                fac_data_received = True
                 
         # データを受信した場合は最終受信時刻を更新
         if data_received:
             self.last_data_time = time.time()
             # 有効なデータが来たらzero_data_countをリセット
-            if pow_data_received or mot_data_received:
+            if pow_data_received or mot_data_received or fac_data_received:
                 self.zero_data_count = 0
+
+    def _normalize_fac(self, fac_value, fallback_time):
+        """facストリームの形を正規化して UI へ送る辞書に変換。
+        可能なキー:
+          - time_str: HH:MM:SS
+          - eyeAction, eyePower
+          - upperAction, upperPower
+          - lowerAction, lowerPower
+        """
+        # 統一出力
+        out = {
+            "time_str": time.strftime("%H:%M:%S", time.localtime(fallback_time)),
+            "eyeAction": None,
+            "eyePower": None,
+            "upperAction": None,
+            "upperPower": None,
+            "lowerAction": None,
+            "lowerPower": None,
+        }
+
+        def set_if_not_none(key, val):
+            if val is not None:
+                out[key] = val
+
+        # 1) 配列ケース（世代によって並びが異なる）
+        if isinstance(fac_value, list):
+            vals = fac_value
+            # 代表的: [time, eyeAct, eyePow, upperAct, upperPow, lowerAct, lowerPow]
+            if len(vals) >= 7:
+                try:
+                    ts = float(vals[0])
+                    out["time_str"] = time.strftime("%H:%M:%S", time.localtime(ts/1000.0 if ts>1e12 else (ts if ts>1e9 else fallback_time)))
+                except Exception:
+                    pass
+                set_if_not_none("eyeAction", vals[1])
+                set_if_not_none("eyePower", _to_float_silent(vals[2]))
+                set_if_not_none("upperAction", vals[3])
+                set_if_not_none("upperPower", _to_float_silent(vals[4]))
+                set_if_not_none("lowerAction", vals[5])
+                set_if_not_none("lowerPower", _to_float_silent(vals[6]))
+            # 旧式: [eyeAct, uAct, uPow, lAct, lPow]
+            elif len(vals) >= 5:
+                set_if_not_none("eyeAction", vals[0])
+                set_if_not_none("upperAction", vals[1])
+                set_if_not_none("upperPower", _to_float_silent(vals[2]))
+                set_if_not_none("lowerAction", vals[3])
+                set_if_not_none("lowerPower", _to_float_silent(vals[4]))
+            # 簡略: [time, eyeAct, eyePow] or [eyeAct, eyePow]
+            elif len(vals) >= 3:
+                try:
+                    ts = float(vals[0])
+                    out["time_str"] = time.strftime("%H:%M:%S", time.localtime(ts/1000.0 if ts>1e12 else (ts if ts>1e9 else fallback_time)))
+                    set_if_not_none("eyeAction", vals[1])
+                    set_if_not_none("eyePower", _to_float_silent(vals[2]))
+                except Exception:
+                    # assume no timestamp
+                    set_if_not_none("eyeAction", vals[0])
+                    set_if_not_none("eyePower", _to_float_silent(vals[1]))
+                    set_if_not_none("upperAction", vals[2] if len(vals)>2 else None)
+            elif len(vals) >= 2:
+                set_if_not_none("eyeAction", vals[0])
+                set_if_not_none("eyePower", _to_float_silent(vals[1]))
+            else:
+                return None
+
+        # 2) dict ケース
+        elif isinstance(fac_value, dict):
+            # time
+            ts = fac_value.get("time")
+            if ts is not None:
+                try:
+                    tsf = float(ts)
+                    out["time_str"] = time.strftime("%H:%M:%S", time.localtime(tsf/1000.0 if tsf>1e12 else (tsf if tsf>1e9 else fallback_time)))
+                except Exception:
+                    pass
+            # オーソドックス
+            for k_src, k_dst in [
+                ("eyeAction","eyeAction"), ("eyeAct","eyeAction"), ("eye","eyeAction"), ("eye_action","eyeAction"),
+                ("eyePower","eyePower"), ("eye_pow","eyePower"),
+                ("upperFaceAction","upperAction"), ("uAct","upperAction"), ("upper_action","upperAction"),
+                ("upperFacePower","upperPower"), ("uPow","upperPower"),
+                ("lowerFaceAction","lowerAction"), ("lAct","lowerAction"), ("lower_action","lowerAction"),
+                ("lowerFacePower","lowerPower"), ("lPow","lowerPower"),
+            ]:
+                if k_src in fac_value:
+                    val = fac_value[k_src]
+                    if k_dst.endswith("Power"):
+                        set_if_not_none(k_dst, _to_float_silent(val))
+                    else:
+                        set_if_not_none(k_dst, val)
+        else:
+            return None
+
+        return out
 
     def is_data_stalled(self):
         """データが停止しているかチェック"""
