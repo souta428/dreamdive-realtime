@@ -1,13 +1,6 @@
 # dreamdive-realtime
 睡眠ステージをリアル睡眠ステージをリアルタイムで監視するシステムです
 
-Wake：動き↑ or α比↑・β比↑
-
-NREM（浅）：動き↓ and θ比中程度、β比↓
-
-NREM（深）：動き↓ and θ比↑↑（個体基準より高い）
-
-REM候補：動き↓↓ and α/βやSEFが相対的に高め（ただし誤判定に注意）
 
 CLIENT_ID=elEQNmVZbVOzSyV6PskFbdUtlI6wKZD2ZZ4vOJC6
 
@@ -16,3 +9,5 @@ CLIENT_SECRET=AeMMNghneyGBXUs69MsXrKhq4nRIyXeCrc7k84z8X9a5ubt2HGMrk4i16vXd8Nnqu9
 ## prorotype.pyはダッシュボードでいろんなAPIで取れるデータを見れるやつです
 
 ## samplecodeは公式のサンプルコードとその解説が載ってます
+
+## sleepstage.mdは睡眠ステージ分析で行う解析の説明が書いてあります
