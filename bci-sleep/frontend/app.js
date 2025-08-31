@@ -13,7 +13,7 @@ const userColors = {
   default: "#94a3b8"
 };
 
-let hypnoChart, brainWavesChart, motionChart;
+let hypnoChart, brainWavesChart, motionChart, eogChart, facChart;
 
 function fmt(n, d=2){ return (n===null||n===undefined||isNaN(n)) ? "—" : Number(n).toFixed(d); }
 
@@ -67,16 +67,52 @@ function makeMotion(ctx){
     type: "line",
     data: {
       datasets: [
-        {label:"Motion RMS", yAxisID:"y1", borderWidth:2, pointRadius:0, data:[], borderColor:"#f59e0b"},
-        {label:"EOG sacc/s", yAxisID:"y2", borderWidth:2, pointRadius:0, data:[], borderColor:"#a78bfa"},
+        {label:"Motion RMS", borderWidth:2, pointRadius:0, data:[], borderColor:"#f59e0b"},
       ]
     },
     options: {
       animation:false, parsing:false,
       scales:{
         x:{ type:"time", time:{unit:"minute"}, ticks:{color:"#cbd5e1"}, grid:{color:"rgba(148,163,184,.2)"} },
-        y1:{ position:"left", min:0, max:100, ticks:{ color:"#f59e0b", stepSize:20 }, grid:{color:"rgba(148,163,184,.1)"}, title:{display:true, text:"Motion RMS", color:"#f59e0b"} },
-        y2:{ position:"right", min:-2, max:2, ticks:{ color:"#a78bfa", stepSize:1 }, grid:{display:false}, title:{display:true, text:"EOG sacc/s", color:"#a78bfa"} },
+        y:{ min:0, max:100, ticks:{ color:"#f59e0b", stepSize:20 }, grid:{color:"rgba(148,163,184,.1)"}, title:{display:true, text:"Motion RMS", color:"#f59e0b"} },
+      },
+      plugins:{ legend:{ labels:{ color:"#e2e8f0"} } }
+    }
+  });
+}
+
+function makeEOG(ctx){
+  return new Chart(ctx, {
+    type: "line",
+    data: {
+      datasets: [
+        {label:"EOG sacc/s", borderWidth:2, pointRadius:0, data:[], borderColor:"#a78bfa"},
+      ]
+    },
+    options: {
+      animation:false, parsing:false,
+      scales:{
+        x:{ type:"time", time:{unit:"minute"}, ticks:{color:"#cbd5e1"}, grid:{color:"rgba(148,163,184,.2)"} },
+        y:{ min:-2, max:2, ticks:{ color:"#a78bfa", stepSize:1 }, grid:{color:"rgba(148,163,184,.1)"}, title:{display:true, text:"EOG sacc/s", color:"#a78bfa"} },
+      },
+      plugins:{ legend:{ labels:{ color:"#e2e8f0"} } }
+    }
+  });
+}
+
+function makeFAC(ctx){
+  return new Chart(ctx, {
+    type: "line",
+    data: {
+      datasets: [
+        {label:"FAC Rate", borderWidth:2, pointRadius:0, data:[], borderColor:"#10b981"},
+      ]
+    },
+    options: {
+      animation:false, parsing:false,
+      scales:{
+        x:{ type:"time", time:{unit:"minute"}, ticks:{color:"#cbd5e1"}, grid:{color:"rgba(148,163,184,.2)"} },
+        y:{ min:0, max:5, ticks:{ color:"#10b981", stepSize:1 }, grid:{color:"rgba(148,163,184,.1)"}, title:{display:true, text:"FAC Rate", color:"#10b981"} },
       },
       plugins:{ legend:{ labels:{ color:"#e2e8f0"} } }
     }
@@ -152,6 +188,8 @@ function render(series){
     document.getElementById("chartHypno").style.display = "none";
     document.getElementById("chartBrainWaves").style.display = "none";
     document.getElementById("chartMotion").style.display = "none";
+    document.getElementById("chartEOG").style.display = "none";
+    document.getElementById("chartFAC").style.display = "none";
     
     // KPIをリセット
     updateKPIs(null);
@@ -162,6 +200,8 @@ function render(series){
     document.getElementById("chartHypno").style.display = "block";
     document.getElementById("chartBrainWaves").style.display = "block";
     document.getElementById("chartMotion").style.display = "block";
+    document.getElementById("chartEOG").style.display = "block";
+    document.getElementById("chartFAC").style.display = "block";
   }
 
   // ユーザー別のデータセットを作成
@@ -253,24 +293,70 @@ function render(series){
     motionDatasetsArray.push({
       label: `${user} - Motion RMS`,
       data: motionDatasets.motion_rms[user],
-      yAxisID: "y1",
       borderWidth: 2,
       pointRadius: 0,
       borderColor: color
-    });
-    motionDatasetsArray.push({
-      label: `${user} - EOG sacc/s`,
-      data: motionDatasets.eog_sacc[user],
-      yAxisID: "y2",
-      borderWidth: 2,
-      pointRadius: 0,
-      borderColor: color,
-      borderDash: [5, 5]
     });
   });
 
   motionChart.data.datasets = motionDatasetsArray;
   motionChart.update();
+
+  // EOGデータもユーザー別に分ける
+  const eogDatasets = {
+    eog_sacc: {}
+  };
+
+  series.rows.forEach(row => {
+    const user = row.user || 'unknown';
+    if (!eogDatasets.eog_sacc[user]) {
+      eogDatasets.eog_sacc[user] = [];
+    }
+    eogDatasets.eog_sacc[user].push({x: row.time, y: row.eog_sacc});
+  });
+
+  const eogDatasetsArray = [];
+  Object.keys(eogDatasets.eog_sacc).forEach(user => {
+    const color = userColors[user] || userColors.default;
+    eogDatasetsArray.push({
+      label: `${user} - EOG sacc/s`,
+      data: eogDatasets.eog_sacc[user],
+      borderWidth: 2,
+      pointRadius: 0,
+      borderColor: color
+    });
+  });
+
+  eogChart.data.datasets = eogDatasetsArray;
+  eogChart.update();
+
+  // FACデータもユーザー別に分ける
+  const facDatasets = {
+    fac_rate: {}
+  };
+
+  series.rows.forEach(row => {
+    const user = row.user || 'unknown';
+    if (!facDatasets.fac_rate[user]) {
+      facDatasets.fac_rate[user] = [];
+    }
+    facDatasets.fac_rate[user].push({x: row.time, y: row.fac_rate});
+  });
+
+  const facDatasetsArray = [];
+  Object.keys(facDatasets.fac_rate).forEach(user => {
+    const color = userColors[user] || userColors.default;
+    facDatasetsArray.push({
+      label: `${user} - FAC Rate`,
+      data: facDatasets.fac_rate[user],
+      borderWidth: 2,
+      pointRadius: 0,
+      borderColor: color
+    });
+  });
+
+  facChart.data.datasets = facDatasetsArray;
+  facChart.update();
 
   updateBadges(series, last);
   updateKPIs(last);
@@ -297,6 +383,8 @@ window.addEventListener("DOMContentLoaded", ()=>{
   hypnoChart = makeHypno(document.getElementById("chartHypno"));
   brainWavesChart = makeBrainWaves(document.getElementById("chartBrainWaves"));
   motionChart = makeMotion(document.getElementById("chartMotion"));
+  eogChart = makeEOG(document.getElementById("chartEOG")); // EOGチャートを追加
+  facChart = makeFAC(document.getElementById("chartFAC")); // FACチャートを追加
   console.log('Charts initialized, starting tick...');
   tick();
 });
