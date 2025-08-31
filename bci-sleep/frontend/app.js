@@ -5,6 +5,14 @@ const stageColor = {
   Deep_candidate: "#a78bfa",
 };
 
+// ユーザー別の色を定義
+const userColors = {
+  mitachi: "#60a5fa",
+  hiratsuka: "#34d399", 
+  gotou: "#f59e0b",
+  default: "#94a3b8"
+};
+
 let hypnoChart, brainWavesChart, motionChart;
 
 function fmt(n, d=2){ return (n===null||n===undefined||isNaN(n)) ? "—" : Number(n).toFixed(d); }
@@ -130,7 +138,10 @@ function render(series){
   const ptsHyp = series.rows.map(r=>({
     x: r.time,
     y: r.stage_num ?? null,
-    stage: r.stage, conf: r.confidence
+    stage: r.stage, 
+    conf: r.confidence,
+    user: r.user || 'unknown',
+    display_name: r.display_name || 'Unknown'
   })).filter(p => p.y !== null);
 
   const last = series.rows[series.rows.length-1];
@@ -153,16 +164,112 @@ function render(series){
     document.getElementById("chartMotion").style.display = "block";
   }
 
-  hypnoChart.data.datasets[0].data = ptsHyp;
-  hypnoChart.data.datasets[0].borderColor = ptsHyp.length ? colorForStage(ptsHyp[ptsHyp.length-1].stage) : "#38bdf8";
+  // ユーザー別のデータセットを作成
+  const userDatasets = {};
+  ptsHyp.forEach(point => {
+    const user = point.user;
+    if (!userDatasets[user]) {
+      userDatasets[user] = [];
+    }
+    userDatasets[user].push(point);
+  });
+
+  // チャートのデータセットを更新
+  const datasets = [];
+  Object.keys(userDatasets).forEach(user => {
+    const color = userColors[user] || userColors.default;
+    datasets.push({
+      label: userDatasets[user][0]?.display_name || user,
+      data: userDatasets[user],
+      stepped: true,
+      borderWidth: 2,
+      pointRadius: 0,
+      borderColor: color,
+      backgroundColor: color
+    });
+  });
+
+  hypnoChart.data.datasets = datasets;
   hypnoChart.update();
 
-  brainWavesChart.data.datasets[0].data = series.rows.map(r=>({x:r.time, y:r.theta_alpha}));
-  brainWavesChart.data.datasets[1].data = series.rows.map(r=>({x:r.time, y:r.beta_rel}));
+  // 脳波データもユーザー別に分ける
+  const brainWaveDatasets = {
+    theta_alpha: {},
+    beta_rel: {}
+  };
+
+  series.rows.forEach(row => {
+    const user = row.user || 'unknown';
+    if (!brainWaveDatasets.theta_alpha[user]) {
+      brainWaveDatasets.theta_alpha[user] = [];
+      brainWaveDatasets.beta_rel[user] = [];
+    }
+    brainWaveDatasets.theta_alpha[user].push({x: row.time, y: row.theta_alpha});
+    brainWaveDatasets.beta_rel[user].push({x: row.time, y: row.beta_rel});
+  });
+
+  const brainWaveDatasetsArray = [];
+  Object.keys(brainWaveDatasets.theta_alpha).forEach(user => {
+    const color = userColors[user] || userColors.default;
+    brainWaveDatasetsArray.push({
+      label: `${user} - θ/α`,
+      data: brainWaveDatasets.theta_alpha[user],
+      borderWidth: 2,
+      pointRadius: 0,
+      borderColor: color
+    });
+    brainWaveDatasetsArray.push({
+      label: `${user} - β (rel)`,
+      data: brainWaveDatasets.beta_rel[user],
+      borderWidth: 2,
+      pointRadius: 0,
+      borderColor: color,
+      borderDash: [5, 5]
+    });
+  });
+
+  brainWavesChart.data.datasets = brainWaveDatasetsArray;
   brainWavesChart.update();
 
-  motionChart.data.datasets[0].data = series.rows.map(r=>({x:r.time, y:r.motion_rms}));
-  motionChart.data.datasets[1].data = series.rows.map(r=>({x:r.time, y:r.eog_sacc}));
+  // モーションデータもユーザー別に分ける
+  const motionDatasets = {
+    motion_rms: {},
+    eog_sacc: {}
+  };
+
+  series.rows.forEach(row => {
+    const user = row.user || 'unknown';
+    if (!motionDatasets.motion_rms[user]) {
+      motionDatasets.motion_rms[user] = [];
+      motionDatasets.eog_sacc[user] = [];
+    }
+    motionDatasets.motion_rms[user].push({x: row.time, y: row.motion_rms});
+    motionDatasets.eog_sacc[user].push({x: row.time, y: row.eog_sacc});
+  });
+
+  const motionDatasetsArray = [];
+  Object.keys(motionDatasets.motion_rms).forEach(user => {
+    const color = userColors[user] || userColors.default;
+    motionDatasetsArray.push({
+      label: `${user} - Motion RMS`,
+      data: motionDatasets.motion_rms[user],
+      yAxisID: "y1",
+      borderWidth: 2,
+      pointRadius: 0,
+      borderColor: color
+    });
+    motionDatasetsArray.push({
+      label: `${user} - EOG sacc/s`,
+      data: motionDatasets.eog_sacc[user],
+      yAxisID: "y2",
+      borderWidth: 2,
+      pointRadius: 0,
+      borderColor: color,
+      borderDash: [5, 5]
+    });
+  });
+
+  motionChart.data.datasets = motionDatasetsArray;
   motionChart.update();
 
   updateBadges(series, last);

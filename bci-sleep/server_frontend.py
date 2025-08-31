@@ -20,9 +20,8 @@ def resolve_csv_path(username=None):
         # セッションファイルが見つからない場合は空のデータを返す
         return None
     else:
-        # 全体ダッシュボードでは古いデータを表示しない
-        # デバイスと接続していない時は空のデータを返す
-        return None
+        # 全体ダッシュボードでは全ユーザーの最新データを統合
+        return "combined"  # 特別な値で統合データを示す
 
 def get_latest_session_file(username):
     """ユーザー管理CSVから最新のセッションファイルを取得"""
@@ -52,9 +51,34 @@ STAGE_TO_NUM = {
     None: None,
 }
 
+def read_combined_data(limit=720):
+    """全ユーザーのデータを統合して読み込み"""
+    all_rows = []
+    registered_users = get_registered_users()
+    
+    for user in registered_users:
+        if user['has_data']:
+            user_rows = read_rows(limit, user['username'])
+            # ユーザー情報を各行に追加
+            for row in user_rows:
+                row['user'] = user['username']
+                row['display_name'] = user['display_name']
+            all_rows.extend(user_rows)
+    
+    # 時間順にソート
+    all_rows.sort(key=lambda x: x['time'])
+    return all_rows[-limit:] if len(all_rows) > limit else all_rows
+
 def read_rows(limit=720, username=None):
     csv_path = resolve_csv_path(username)
     if not csv_path:
+        return []
+    
+    # 統合データの場合
+    if csv_path == "combined":
+        return read_combined_data(limit)
+    
+    if not os.path.exists(csv_path):
         return []
     
     out = []
@@ -110,7 +134,7 @@ def get_registered_users():
         for row in reader:
             # データファイルの存在確認
             user_csv_path = resolve_csv_path(row['username'])
-            has_data = os.path.exists(user_csv_path)
+            has_data = user_csv_path is not None and os.path.exists(user_csv_path)
             
             users.append({
                 'username': row['username'],
