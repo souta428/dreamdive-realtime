@@ -1,5 +1,5 @@
 # app_sleep.py
-import time, csv, os
+import time, csv, os, sys
 from datetime import datetime
 from cortex import Cortex
 from sleep_engine import SleepEngine
@@ -13,18 +13,54 @@ CLIENT_ID     = os.getenv("CLIENT_ID", "")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET", "")
 HEADSET_ID    = os.getenv("HEADSET_ID", "")   # 任意
 BASE_CSV_NAME = "sleep_candidates"
+USER_CSV_FILE = "user_data/users.csv"
 
 def _is_all_zero(vec):
     return all((v == 0 or v is None) for v in vec)
 
+def update_user_session(username, session_file):
+    """ユーザーのセッション情報を更新"""
+    if not os.path.exists(USER_CSV_FILE):
+        return False
+    
+    # 全ユーザーを読み込み
+    users = []
+    with open(USER_CSV_FILE, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            users.append(row)
+    
+    # 指定ユーザーを更新
+    for user in users:
+        if user['username'] == username:
+            user['last_session'] = session_file
+            user['total_sessions'] = str(int(user['total_sessions']) + 1)
+            break
+    
+    # CSVファイルを再書き込み
+    with open(USER_CSV_FILE, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "username", "display_name", "created_date", 
+            "last_session", "total_sessions", "notes"
+        ])
+        for user in users:
+            writer.writerow([
+                user['username'], user['display_name'], user['created_date'],
+                user['last_session'], user['total_sessions'], user['notes']
+            ])
+    
+    return True
+
 class SleepApp:
-    def __init__(self):
+    def __init__(self, username=None):
         self.c = Cortex(CLIENT_ID, CLIENT_SECRET, debug_mode=False, headset_id=HEADSET_ID)
         self.eng = SleepEngine()
         self._last_data_ts = time.time()
         self._session_start_time = None  # 計測開始時刻
         self._subscribed = False
         self._csv_filename = None  # CSVファイル名
+        self._username = username  # ユーザー名
 
         self.c.bind(create_session_done=self.on_create_session_done)
         self.c.bind(new_data_labels=self.on_new_data_labels)
@@ -47,13 +83,28 @@ class SleepApp:
 
     def on_create_session_done(self, *args, **kwargs):
         print("[INFO] Session created. Subscribing streams...")
-        if self._session_start_time is None:
-            self._session_start_time = time.time()
-            # セッション開始時にタイムスタンプ付きCSVファイル名を生成
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # セッション開始時にタイムスタンプ付きCSVファイル名を生成（再接続時も新しいファイルを作成）
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        if self._username:
+            # ユーザー別ディレクトリを作成
+            user_data_dir = os.path.join("user_data", self._username)
+            os.makedirs(user_data_dir, exist_ok=True)
+            self._csv_filename = os.path.join(user_data_dir, f"{BASE_CSV_NAME}_{timestamp}.csv")
+            print(f"[INFO] User-specific CSV: {self._csv_filename}")
+            
+            # ユーザーのセッション情報を更新
+            session_filename = os.path.basename(self._csv_filename)
+            if update_user_session(self._username, session_filename):
+                print(f"[INFO] Updated session info for user: {self._username}")
+        else:
             self._csv_filename = f"{BASE_CSV_NAME}_{timestamp}.csv"
-            print(f"[INFO] Session start time set: {self._session_start_time}")
-            print(f"[INFO] CSV filename: {self._csv_filename}")
+        
+        # セッション開始時刻を設定（再接続時もリセット）
+        self._session_start_time = time.time()
+        print(f"[INFO] Session start time set: {self._session_start_time}")
+        print(f"[INFO] CSV filename: {self._csv_filename}")
+        
         self.c.sub_request(['pow', 'mot', 'dev', 'fac'])
         self._subscribed = True
 
@@ -134,12 +185,12 @@ class SleepApp:
     def _print_row(self, r):
         # 表示用には絶対時間を使用
         absolute_time = r['t'] + (self._session_start_time or 0)
-        msg = (f"[{time.strftime('%H:%M:%S', time.localtime(absolute_time))}] "
+        user_info = f"[{self._username}] " if self._username else ""
+        msg = (f"{user_info}[{time.strftime('%H:%M:%S', time.localtime(absolute_time))}] "
                f"stage={r['stage']}, conf={r['confidence']} | "
                f"th/al={r['theta_alpha']:.2f}, beta_rel={r['beta_rel']:.2f}, "
                f"motRMS={r['motion_rms']:.3f}, facRate={r['fac_rate']:.3f}, "
-               f"signal={r['signal']:.2f}, EOG={'ON' if int(r.get('eog_on',0)) else 'OFF'}, "
-               f"eyeAct={r.get('eye_act','')}")
+               f"signal={r['signal']:.2f}, EOG={'ON' if int(r.get('eog_on',0)) else 'OFF'}")
         print(msg)
 
     def _append_csv(self, r):
@@ -149,15 +200,22 @@ class SleepApp:
         with open(self._csv_filename, "a", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             if newfile:
-                w.writerow(["time","stage","confidence","theta_alpha","beta_rel","motion_rms","fac_rate","signal","eog_on","eog_sacc","eye_act"])
+                w.writerow(["time","stage","confidence","theta_alpha","beta_rel","motion_rms","fac_rate","signal","eog_on","eog_sacc"])
             w.writerow([
                 round(r['t'], 1), r['stage'] or "", r['confidence'],
                 r['theta_alpha'], r['beta_rel'], r['motion_rms'],
-                r['fac_rate'], r['signal'], r.get('eog_on',0.0), r.get('eog_sacc',0.0), r.get('eye_act','')
+                r['fac_rate'], r['signal'], r.get('eog_on',0.0), r.get('eog_sacc',0.0)
             ])
 
 if __name__ == "__main__":
     if not CLIENT_ID or not CLIENT_SECRET:
         raise SystemExit("Please set CLIENT_ID / CLIENT_SECRET via environment variables or .env file")
-    app = SleepApp()
+    
+    # コマンドライン引数からユーザー名を取得
+    username = None
+    if len(sys.argv) > 1:
+        username = sys.argv[1]
+        print(f"[INFO] Running for user: {username}")
+    
+    app = SleepApp(username)
     app.start()
