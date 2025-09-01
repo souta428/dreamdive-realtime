@@ -89,11 +89,38 @@ class SleepEngine:
         self.dev_signal = float(signal)
 
     def on_fac(self, t: float, eyeAct: Optional[str], uPow: float, lPow: float):
-        strong = max(uPow or 0.0, lPow or 0.0) >= 0.5
-        if eyeAct in ("look_left", "look_right") and strong:
-            self.fac_ring.push(t, 1)
-        else:
-            self.fac_ring.push(t, 0)
+        """
+        Facial expression (fac) stream handler
+        Detects eye movements and facial actions for sleep stage analysis
+        """
+        # Validate input parameters
+        if eyeAct is None:
+            eyeAct = ""
+        uPow = float(uPow or 0.0)
+        lPow = float(lPow or 0.0)
+        
+        # Enhanced power threshold detection
+        power_threshold = 0.5
+        strong = max(uPow, lPow) >= power_threshold
+        
+        # Expanded eye movement detection for better REM detection
+        eye_movements = ("look_left", "look_right", "lookLeft", "lookRight")
+        facial_actions = ("wink_left", "wink_right", "blink", "furrow_brow", "raise_brow")
+        
+        # Score facial activity for sleep analysis
+        activity_score = 0
+        
+        # Eye movements (primary indicator for REM sleep)
+        if eyeAct in eye_movements and strong:
+            activity_score = 2  # High score for eye movements
+        # Other facial expressions (secondary indicators)
+        elif eyeAct in facial_actions and strong:
+            activity_score = 1  # Medium score for facial expressions
+        # Weak but present activity
+        elif eyeAct and max(uPow, lPow) >= 0.3:
+            activity_score = 0.5  # Low score for weak activity
+        
+        self.fac_ring.push(t, activity_score)
 
     def on_eog_sample(self, t: float, v: float, src_fs_hint: float = 200.0):
         self._eog_decim += 1
@@ -145,6 +172,36 @@ class SleepEngine:
                 i += 1
         return events / (len(xs)/fs)
 
+    def _calculate_fac_activity_rate(self, fac_vals):
+        """
+        Calculate facial activity rate with weighted scoring
+        Returns normalized activity rate between 0.0 and 1.0
+        """
+        if not fac_vals:
+            return 0.0
+        
+        # Count different activity levels
+        high_activity = sum(1 for v in fac_vals if v >= 2.0)  # Eye movements
+        medium_activity = sum(1 for v in fac_vals if 1.0 <= v < 2.0)  # Facial expressions
+        low_activity = sum(1 for v in fac_vals if 0.3 <= v < 1.0)  # Weak activity
+        
+        # Weighted calculation
+        total_samples = len(fac_vals)
+        weighted_score = (high_activity * 1.0 + medium_activity * 0.6 + low_activity * 0.3)
+        
+        return min(1.0, weighted_score / total_samples)
+
+    def _is_fac_stream_active(self) -> bool:
+        """
+        Check if facial expression stream is actively providing data
+        """
+        if self.fac_ring.empty():
+            return False
+        
+        # Check if we have recent facial expression data (within last 10 seconds)
+        recent_data = [v for t, v in self.fac_ring.buf if time.time() - t <= 10.0]
+        return len(recent_data) > 0
+
     def _epoch_features(self) -> Dict[str, float]:
         pow_vals = self.pow_ring.values()
         mot_vals = self.mot_ring.values()
@@ -163,7 +220,8 @@ class SleepEngine:
         theta_alpha = self._theta_alpha_ratio(ave_vec)
         beta_rel = self._beta_rel(ave_vec)
         motion_rms = self._median(mot_vals)
-        fac_rate = sum(1 for v in fac_vals if v >= 1) / max(len(fac_vals), 1)
+        # Enhanced facial activity rate calculation
+        fac_rate = self._calculate_fac_activity_rate(fac_vals)
 
         eog_on = self.eog_available(now)
         eog_vals = self.eog_ring.values()
@@ -178,11 +236,15 @@ class SleepEngine:
             print(f"[INFO] EOG availability changed: {self.prev_eog_available} -> {eog_on}")
             self.prev_eog_available = eog_on
 
+        # Check facial expression stream status
+        fac_active = self._is_fac_stream_active()
+
         return {
             "theta_alpha": theta_alpha,
             "beta_rel": beta_rel,
             "motion_rms": motion_rms,
             "fac_rate": fac_rate,
+            "fac_active": 1.0 if fac_active else 0.0,
             "signal": self.dev_signal,
             "eog_var": eog_var,
             "eog_sacc": eog_sacc,
@@ -192,6 +254,8 @@ class SleepEngine:
     def _raw_stage(self, f: Dict[str, float]) -> Tuple[str, float]:
         th_al = f["theta_alpha"]; mot = f["motion_rms"]; beta = f["beta_rel"]
         fac = f["fac_rate"]; eog_s = f.get("eog_sacc", 0.0); eog_on = f.get("eog_on", 0.0) > 0.5
+        fac_active = f.get("fac_active", 0.0) > 0.5
+        
         sleep_like = (th_al >= 1.2) and (mot <= 0.15)
         wake_like  = (th_al <  1.0) or  (mot >  0.25)
 
@@ -199,16 +263,36 @@ class SleepEngine:
         if wake_like:  scores["Wake"] += 0.7
         if sleep_like: scores["Light_NREM_candidate"] += 0.6
 
+        # Enhanced REM detection with improved fac integration
         if eog_on:
+            # Primary EOG-based REM detection
             rem_like = (mot <= 0.15) and ((eog_s >= 0.3) or (eog_s >= 0.2 and beta >= 0.30))
             if rem_like:
                 scores["REM_candidate"] += 0.6
                 if eog_s >= 0.6:
                     scores["REM_candidate"] += 0.2
+                # Boost score if fac also indicates activity
+                if fac_active and fac > 0.05:
+                    scores["REM_candidate"] += 0.1
         else:
-            rem_like = (mot <= 0.15) and ((beta >= 0.35) and (fac > 0.02))
-            if rem_like:
-                scores["REM_candidate"] += 0.3
+            # Enhanced fallback REM detection without EOG
+            if fac_active:
+                # Improved fac-based REM detection with multiple thresholds
+                rem_like = (mot <= 0.15) and (
+                    (beta >= 0.35 and fac > 0.03) or  # Strong beta + moderate fac
+                    (beta >= 0.30 and fac > 0.08) or  # Moderate beta + high fac
+                    (fac > 0.15)  # Very high fac activity alone
+                )
+                if rem_like:
+                    scores["REM_candidate"] += 0.4  # Increased from 0.3
+                    # Additional boost for very active facial expressions
+                    if fac > 0.25:
+                        scores["REM_candidate"] += 0.2
+            else:
+                # Fallback to basic beta detection when fac is not active
+                rem_like = (mot <= 0.15) and (beta >= 0.40)  # Higher threshold
+                if rem_like:
+                    scores["REM_candidate"] += 0.25
 
         deep_like = (mot <= 0.10) and (beta <= 0.22)
         if deep_like:
@@ -242,7 +326,7 @@ class SleepEngine:
             return {
                 "t": now, "stage": None, "confidence": 0.0,
                 "theta_alpha": 0.0, "beta_rel": 0.0,
-                "motion_rms": 0.0, "fac_rate": 0.0,
+                "motion_rms": 0.0, "fac_rate": 0.0, "fac_active": 0.0,
                 "signal": self.dev_signal, "eog_var": 0.0,
                 "eog_sacc": 0.0, "eog_on": 0.0, "note": "poor_quality"
             }
